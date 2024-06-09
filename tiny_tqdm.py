@@ -3,32 +3,23 @@ import os
 import sys
 
 class tiny_tqdm:
-    def __init__(self, iterable=None, desc="",  mininterval=0.001, ascii=None, unit='it',  **kwargs):
-        self.iterable=iterable; self.mininterval=mininterval; self.min_iter=1; self.previous_time=time(); self.total=len(iterable); self.n=0; self.elapsed=0; self.desc=desc; self.unit=unit; self.ascii=ascii
-    def __iter__(self):
-        for obj in self.iterable:
-            yield obj
-            self.n+=1
-            if((not self.n%self.min_iter) and (time() - self.previous_time) >= self.mininterval) or self.n==1 or self.n==self.total :
-                    self.update()      
-    def update(self):
-        BARS = (u" " + u''.join(map(chr, range(0x258F, 0x2587, -1)))) if not self.ascii else " 123456789#"
-        prefix = f"{self.desc}"+": "*int(bool(len(self.desc)))+ " "*(3-len(str(int(100*self.n/self.total)))) + str(int(100*self.n/self.total))+"%|"
-        self.elapsed += time() - self.previous_time
-        avg_it_s = 0 if self.n==1 else self.n/self.elapsed
-        it_s = 0 if (self.n==1 or self.n==self.total) else self.min_iter/ (time() - self.previous_time)
-        eta = "?" if self.n==1 else (self.total-self.n) // avg_it_s
-        def _fmt(t):return f'0{int(t)}' if t<10 else int(t)
-        suffix = f"| {self.n}/{self.total} [{_fmt(self.elapsed//60)}:{_fmt(int(self.elapsed)%60)}<{str(_fmt(eta//60))+':'+str(_fmt(eta%60)) if eta!='?' else eta}, {'?' if self.n==1 else '{:5.2f}'.format(avg_it_s if self.n==self.total else it_s)}{self.unit}/s]"
-        bar_length, frac_bar_index = divmod(int((self.n/self.total) * (os.get_terminal_size()[0] -1 - len(prefix+suffix)) * (len(BARS)-1)), (len(BARS)-1))
-        sys.stdout.write("\n\x1b[A" + prefix + str(bar_length * BARS[-1]) + str(BARS[frac_bar_index])*(self.n!=self.total) + ' '*(os.get_terminal_size()[0] -2  -bar_length-len(prefix+suffix)) + suffix + f"\x1b[{os.get_terminal_size()[0]}G"*int(self.n!=self.total) + "\n"*(self.n==self.total))
-        self.min_iter = 1 if self.n==1 or int(avg_it_s * self.mininterval)==0 else int(avg_it_s * self.mininterval)      
-        self.previous_time = time()
-    def set_description(self, desc=None):
-        self.desc = desc
+    def __init__(s, iter=None, desc="", mininterval=0.001, unit='it'):
+        s.iter=iter; s.mininterval=mininterval; s.min_iter=1; s.prev_time=time(); s.total=len(iter); s.n=0; s.elapsed=1e-6; s.desc=desc; s.unit=unit
+    def __iter__(s):
+        for obj in s.iter: s.n+=1; s.update() if ((not s.n%s.min_iter) and (time() - s.prev_time) >= s.mininterval) or s.n==1 or s.n==s.total else ""; yield obj
+    def update(s):
+        BARS, term_w = u" " + u''.join(map(chr, range(0x258F, 0x2587, -1))),os.get_terminal_size()[0]
+        s.elapsed += time() - s.prev_time
+        avg_it_s = s.n/s.elapsed
+        it_s = avg_it_s if (s.n==1 or s.n==s.total) else s.min_iter/ (time() - s.prev_time)
+        def _fmt(t):return f"{int(t//3600):02d}:"*int(t>=3600) + ":".join([f"{int(n):02d}" for n in divmod(t%3600,60)])
+        prefix, suffix = f"{s.desc}{100*s.n//s.total:3}%|", f"| {s.n}/{s.total} [{_fmt(s.elapsed)}<{'?' if s.n==1 else _fmt((s.total-s.n)//it_s)}, {'?' if s.n==1 else '{:5.2f}'.format(it_s)}{s.unit}/s]"
+        bar_len, frac_idx = divmod(int((s.n/s.total) * (term_w -1 - len(prefix+suffix)) * (len(BARS)-1)), (len(BARS)-1))
+        sys.stdout.write(f"\n\x1b[A" + prefix + (bar_len * BARS[-1]) + BARS[frac_idx]*(s.n!=s.total) + ' '*(term_w-2 -bar_len-len(prefix+suffix)) + suffix + f"\x1b[{term_w}G"*(s.n!=s.total) + "\n"*(s.n==s.total))
+        s.min_iter = 1 if s.n==1 or int(avg_it_s * s.mininterval)==0 else int(avg_it_s * s.mininterval)      
+        s.prev_time = time()
+    def set_description(s, desc=None):s.desc = desc+": "
     @classmethod
-    def write(self,s,end="\n"):
-         sys.stdout.write("\n\x1b[A" + ' '*os.get_terminal_size()[0] + "\n\x1b[A" + s+end)     
-
+    def write(s,msg,end="\n"):sys.stdout.write("\n\x1b[A" + ' '*os.get_terminal_size()[0] + "\n\x1b[A" + msg+end)     
 def trange(*args, **kwargs):
     return tiny_tqdm(range(*args), **kwargs)
